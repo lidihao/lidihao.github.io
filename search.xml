@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search> 
+  
+  
+    
+    <entry>
+      <title>java堆内存</title>
+      <link href="/2020/06/08/java%E5%A0%86%E5%86%85%E5%AD%98/"/>
+      <url>/2020/06/08/java%E5%A0%86%E5%86%85%E5%AD%98/</url>
+      
+        <content type="html"><![CDATA[<p>​    Java 中的堆是JVM所管理的最大的一块内存空间，主要用于存放各种类的实例对象。<br>在 Java 中，堆被划分成两个不同的区域：新生代 ( Young )、老年代 ( Old )。新生代 ( Young ) 又被划分为三个区域：Eden、From Survivor、To Survivor。<br>这样划分的目的是为了使 JVM 能够更好的管理堆内存中的对象，包括内存的分配以及回收。<br>堆的内存模型大致为：</p><p><img src="/images/heap.png" alt=""></p><h2 id="堆内存"><a href="#堆内存" class="headerlink" title="堆内存"></a>堆内存</h2><h3 id="新生代"><a href="#新生代" class="headerlink" title="新生代"></a>新生代</h3><p>    程序中新建的对象都将分配到新生代中，新生代又由Eden(伊甸园)与两块Survivor(幸存者) Space 构成。Eden 与Survivor Space 的空间大小比例默认为8:1，即当Young/New Generation 区域的空间大小总数为10M 时，Eden 的空间大小为8M，两块Survivor Space 则各分配1M，这个比例可以通过-XX:SurvivorRatio 参数来修改。Young/New Generation的大小则可以通过-Xmn参数来指定。</p><h4 id="Eden"><a href="#Eden" class="headerlink" title="Eden"></a>Eden</h4><p>    刚刚新建的对象将会被放置到Eden 中</p><h4 id="Survivor-Space："><a href="#Survivor-Space：" class="headerlink" title="Survivor Space："></a>Survivor Space：</h4><p>        幸存者区域是新生代与老年代的缓冲区域，两块幸存者区域分别为s0 与s1，当触发<strong>Minor GC</strong> 后     将 仍然存活的对象移动到S0中去(From Eden To s0)。这样Eden 就被清空可以分配给新的对象。<br>当再一次触发Minor GC后，S0和Eden 中存活的对象被移动到S1中(From s0To s1)，S0即被清空。<strong>在同一时刻, 只有Eden和一个Survivor Space同时被操作。所以s0与s1两块Survivor 区同时会至少有一个为空闲的,所以新生代的大小为eden区的大小加一个survivor</strong>。<br>当每次对象从Eden 复制到Survivor Space 或者从Survivor Space 之间复制，计数器会自动增加其值。 默认情况下如果复制发生超过16次，JVM 就会停止复制并把他们移到老年代中去。如果一个对象不能在Eden中被创建，它会直接被创建在老年代中。</p><h3 id="老年代"><a href="#老年代" class="headerlink" title="老年代"></a>老年代</h3><p>    <strong>老年代用于存放程序中经过几次垃圾回收后还存活的对象</strong>，例如缓存的对象等，老年代所占用的内存大小即为-Xmx 与-Xmn 两个参数之差。<br>堆是JVM 中所有线程共享的，因此在其上进行对象内存的分配均需要进行加锁，这也导致了new 对象的开销是比较大的，鉴于这样的原因，Hotspot JVM 为了提升对象内存分配的效率，对于所创建的线程都会分配一块独立的空间，这块空间又称为TLAB（Thread Local Allocation Buffer），其大小由JVM 根据运行的情况计算而得，在TLAB 上分配对象时不需要加锁，因此JVM 在给线程的对象分配内存时会尽量的在TLAB 上分配，在这种情况下JVM 中分配对象内存的性能和C 基本是一样高效的，但如果对象过大的话则仍然是直接使用堆空间分配，<strong>TLAB 仅作用于新生代的Eden</strong>，因此在编写Java 程序时，通常多个小的对象比大的对象分配起来更加高效，但这种方法同时也带来了两个问题，一是空间的浪费，二是对象内存的回收上仍然没法做到像Stack 那么高效，同时也会增加回收时的资源的消耗，可通过在启动参数上增加 -XX:+PrintTLAB来查看TLAB 这块的使用情况。</p><h2 id="回收算法"><a href="#回收算法" class="headerlink" title="回收算法"></a>回收算法</h2><h3 id="minor-GC"><a href="#minor-GC" class="headerlink" title="minor GC"></a>minor GC</h3><p>​            minor GC也称新生代GC,是一种应用在新生代上的垃圾收集动作,该GC应用的是<strong>复制算法</strong>;      <br><strong>复制算法</strong>:他将可用内存按容量划分为大小相等的两块,每次使用其中一块,当这一块的内存用完了,就将还活着的对象复制到另一块上,并将这块内存清空,待下次使用,这就不用考虑内存碎片的问题.</p><p><img src="/images/fullGC%E4%B8%8EminorGC.jpeg" alt=""></p><p>为了使内存使用率更加高,新生代分为三个区,eden,suvivor1,suvivor2,每次minorGC发生时,会将eden和其中一个suvivor中存活的对像复制到另一个suvivor,并清空eden和当前suvivor,所以新生代的大小为eden加一个suvivor.通常,eden,suvivor1,suvivor2的比例为8:1:1,可以通过-XX:SuvivorRatio=n来决定eden与suvivor的比例为n:1.当suvivor的空间不够用的时候,需要依赖其他内存(老年代)进行分配担保.</p><h3 id="full-GC"><a href="#full-GC" class="headerlink" title="full GC"></a>full GC</h3><p>      full GC的算法是标志-整理算法:将所有存活的对象都向一端移动,然后直接清理端边界以外的内存</p>]]></content>
+      
+      
+      <categories>
+          
+          <category> java源码 </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> jvm </tag>
+            
+            <tag> java </tag>
+            
+            <tag> 源码 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>Hello World</title>
+      <link href="/2017/05/26/hello-world/"/>
+      <url>/2017/05/26/hello-world/</url>
+      
+        <content type="html"><![CDATA[<p>Welcome to <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/" target="_blank" rel="noopener">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html" target="_blank" rel="noopener">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues" target="_blank" rel="noopener">GitHub</a>.</p><h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new <span class="string">"My New Post"</span></span><br></pre></td></tr></table></figure><p>More info: <a href="https://hexo.io/docs/writing.html" target="_blank" rel="noopener">Writing</a></p><h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo server</span><br></pre></td></tr></table></figure><p>More info: <a href="https://hexo.io/docs/server.html" target="_blank" rel="noopener">Server</a></p><h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo generate</span><br></pre></td></tr></table></figure><p>More info: <a href="https://hexo.io/docs/generating.html" target="_blank" rel="noopener">Generating</a></p><h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo deploy</span><br></pre></td></tr></table></figure><p>More info: <a href="https://hexo.io/docs/one-command-deployment.html" target="_blank" rel="noopener">Deployment</a></p>]]></content>
+      
+      
+      <categories>
+          
+          <category> web前端 </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> jQuery </tag>
+            
+            <tag> 表格 </tag>
+            
+            <tag> 表单验证 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+  
+  
+</search>
